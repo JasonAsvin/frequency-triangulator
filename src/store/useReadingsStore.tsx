@@ -8,6 +8,7 @@ import {
   doc,
   onSnapshot,
   getDocs,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -23,6 +24,8 @@ interface ReadingsState {
 
   // Firebase actions
   sendToBackend: (payload: Omit<DeviceReading, "readingId">) => Promise<void>;
+  deleteFromBackend: (readingId: string) => Promise<void>;
+  deleteAllFromBackend: () => Promise<void>;
   subscribeBackend: () => () => void; // returns unsubscribe function
 }
 
@@ -57,6 +60,31 @@ export const useReadingsStore = create<ReadingsState>((set, get) => ({
       await addDoc(collection(db, COLLECTION_NAME), payload);
     } catch (err) {
       console.error("Failed to send to Firebase:", err);
+    }
+  },
+
+  // Delete a single document from Firestore
+  deleteFromBackend: async (readingId: string) => {
+    try {
+      await deleteDoc(doc(db, COLLECTION_NAME, readingId));
+    } catch (err) {
+      console.error("Failed to delete from Firebase:", err);
+    }
+  },
+
+  // Delete all documents from Firestore (batch delete)
+  deleteAllFromBackend: async () => {
+    try {
+      const colRef = collection(db, COLLECTION_NAME);
+      const snapshot = await getDocs(colRef);
+      const batch = writeBatch(db);
+      snapshot.docs.forEach((d) => {
+        batch.delete(doc(db, COLLECTION_NAME, d.id));
+      });
+      await batch.commit();
+      get().reset(); // clear local store after successful deletion
+    } catch (err) {
+      console.error("Failed to delete all from Firebase:", err);
     }
   },
 
